@@ -1,0 +1,139 @@
+name: publish appimageutil
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  check:
+    runs-on: ubuntu-latest
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id:  check-if-build
+        run: |
+          set -ex
+
+          cat > QUERY <<EOF
+          {
+            repository(owner: "leleliu008", name: "appimageutil") {
+                latestRelease {
+                  name
+                }
+            }
+          }
+          EOF
+
+          LATEST_RELEASE_VERSION="$(gh api graphql -f "query=$(cat QUERY)" --jq .data.repository.latestRelease.name)"
+
+          RELEASE_VERSION="$(date +%Y.%m.%d)"
+
+          if [ "$LATEST_RELEASE_VERSION" = "$RELEASE_VERSION" ] ; then
+              RELEASE=no
+          else
+              RELEASE=yes
+          fi
+
+          printf 'RELEASE=%s\n' "$RELEASE" >> "$GITHUB_OUTPUT"
+          printf 'RELEASE_VERSION=%s\n' "$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+
+
+    outputs:
+      if-new-release:  ${{ steps.check-if-build.outputs.RELEASE }}
+      release-version: ${{ steps.check-if-build.outputs.RELEASE_VERSION }}
+
+
+  build_publish:
+    needs: [check]
+    if: needs.check.outputs.if-new-release == 'yes'
+
+    runs-on: ubuntu-latest
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target-arch: [loongarch64, x86_64, aarch64, ppc64le, riscv64, s390x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: |
+          cat > run.sh <<EOF
+          set -ex
+
+          COLOR_GREEN='\033[0;32m'        # Green
+          COLOR_PURPLE='\033[0;35m'       # Purple
+          COLOR_OFF='\033[0m'             # Reset
+
+          echo() {
+              printf '%b\n' "\$*"
+          }
+
+          run() {
+              echo "\${COLOR_PURPLE}==>\${COLOR_OFF} \${COLOR_GREEN}\$@\${COLOR_OFF}"
+              eval "\$*"
+          }
+
+          export GITHUB_ACTIONS=true
+
+          run uname -a
+          run id
+          run pwd
+
+          run apk update
+          run apk add g++ libc-dev linux-headers
+
+          run wget https://raw.githubusercontent.com/leleliu008/ppkg/master/ppkg
+          run chmod a+x ppkg
+
+          run ./ppkg setup
+          run ./ppkg update
+          run ./ppkg install xxd curl gnupg zsync bsdtar squashfs appstream coreutils findutils desktop-file-utils --static
+
+          run install -d appimageutil.d/
+          run cp -L ~/.ppkg/installed/linux-musl-x86_64/xxd/bin/xxd                                  appimageutil.d/
+          run cp -L ~/.ppkg/installed/linux-musl-x86_64/file/bin/curl                                appimageutil.d/
+          run cp -L ~/.ppkg/installed/linux-musl-x86_64/file/bin/file                                appimageutil.d/
+          run cp -L ~/.ppkg/installed/linux-musl-x86_64/gnupg/bin/gpg                                appimageutil.d/
+          run cp -L ~/.ppkg/installed/linux-musl-x86_64/bsdtar/bin/bsdtar                            appimageutil.d/
+          run cp -L ~/.ppkg/installed/linux-musl-x86_64/zsync/bin/zsyncmake                          appimageutil.d/
+          run cp -L ~/.ppkg/installed/linux-musl-x86_64/squashfs/bin/mksquashfs                      appimageutil.d/
+          run cp -L ~/.ppkg/installed/linux-musl-x86_64/coreutils/bin/sha256sum                      appimageutil.d/
+          run cp -L ~/.ppkg/installed/linux-musl-x86_64/findutils/bin/find                           appimageutil.d/
+          run cp -L ~/.ppkg/installed/linux-musl-x86_64/appstream/bin/appstreamcli                   appimageutil.d/
+          run cp -L ~/.ppkg/installed/linux-musl-x86_64/desktop-file-utils/bin/desktop-file-validate appimageutil.d/
+
+          run mv appimageutil.sh appimageutil.d/appimageutil
+
+          run mv ~/.ppkg/core/cacert.pem appimageutil.d/
+
+          run mv appimageutil.d appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}
+
+          run ~/.ppkg/uppm/installed/bsdtar/bin/bsdtar cvaf appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}.tar.xz appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}
+          EOF
+
+      - run: curl -LO https://raw.githubusercontent.com/alpinelinux/alpine-chroot-install/master/alpine-chroot-install
+      - run: chmod +x alpine-chroot-install
+      - run: sudo ./alpine-chroot-install -d /alpine -a ${{ matrix.target-arch }}
+      - run: /alpine/enter-chroot sh run.sh
+      - run: /alpine/destroy
+
+      - run: ls -a
+
+      - run: |
+          cat >> notes.md <<EOF
+          ## sha256sum
+
+          \`\`\`
+          $(sha256sum *.tar.xz)
+          \`\`\`
+          EOF
+
+      - run: gh release create ${{ needs.check.outputs.release-version }} *.tar.xz --title ${{ needs.check.outputs.release-version }} --notes-file notes.md
