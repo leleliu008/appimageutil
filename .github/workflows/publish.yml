@@ -104,7 +104,6 @@ jobs:
           run install -d appimageutil.d/
           run cp -L ~/.ppkg/installed/linux-musl-x86_64/xxd/bin/xxd                                  appimageutil.d/
           run cp -L ~/.ppkg/installed/linux-musl-x86_64/curl/bin/curl                                appimageutil.d/
-          run cp -L ~/.ppkg/installed/linux-musl-x86_64/file/bin/file                                appimageutil.d/
           run cp -L ~/.ppkg/installed/linux-musl-x86_64/gnupg/bin/gpg                                appimageutil.d/
           run cp -L ~/.ppkg/installed/linux-musl-x86_64/bsdtar/bin/bsdtar                            appimageutil.d/
           run cp -L ~/.ppkg/installed/linux-musl-x86_64/zsync/bin/zsyncmake                          appimageutil.d/
