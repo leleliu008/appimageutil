@@ -95,6 +95,10 @@ jobs:
 
           run ./ppkg setup
           run ./ppkg update
+
+          sed -i '/^dep-pkg: /s|systemd||'       ~/.ppkg/repos.d/official-core/formula/appstream.yml
+          sed -i 's|systemd=true|systemd=false|' ~/.ppkg/repos.d/official-core/formula/appstream.yml
+
           run ./ppkg install xxd curl gnupg zsync bsdtar squashfs appstream coreutils findutils desktop-file-utils --static
 
           run install -d appimageutil.d/
