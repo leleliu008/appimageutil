@@ -47,14 +47,11 @@ jobs:
       release-version: ${{ steps.check-if-build.outputs.RELEASE_VERSION }}
 
 
-  build_publish:
+  build:
     needs: [check]
     if: needs.check.outputs.if-new-release == 'yes'
 
     runs-on: ubuntu-latest
-
-    env:
-      GH_TOKEN: ${{ github.token }}
 
     strategy:
       fail-fast: false
@@ -128,6 +125,30 @@ jobs:
       - run: /alpine/enter-chroot sh run.sh
       - run: /alpine/destroy
 
+      - run: ls
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}.tar.xz
+          path: appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}.tar.xz
+
+
+  publish:
+    needs: [check, build]
+    if: needs.check.outputs.if-has-new-commit == 'yes'
+
+    runs-on: ubuntu-latest
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          path: .
+          merge-multiple: true
+
       - run: ls -a
 
       - run: |
@@ -138,5 +159,10 @@ jobs:
           $(sha256sum *.tar.xz)
           \`\`\`
           EOF
+
+      # to avaid: failed to run git: fatal: not a git repository (or any of the parent directories): .git
+      - run: |
+          git -c init.defaultBranch=master init
+          git remote add origin ${{ github.repositoryUrl }}
 
       - run: gh release create ${{ needs.check.outputs.release-version }} *.tar.xz --title ${{ needs.check.outputs.release-version }} --notes-file notes.md
