@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop">
   <id>appimageutil.desktop</id>
-  <metadata_license>MIT</metadata_license>
-  <project_license>MIT</project_license>
+  <metadata_license>Apache-2.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
   <name>appimageutil</name>
   <summary>A command-line utility to generate AppImage from AppDir</summary>
   <description>A command-line utility to generate AppImage from AppDir</description>
