@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=appimageutil
+Exec=appimageutil
+Comment=A command-line utility to generate AppImage from AppDir
+Icon=appimageutil
+Categories=Development;
+Terminal=true
+

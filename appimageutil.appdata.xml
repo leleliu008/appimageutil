@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+  <id>appimageutil.desktop</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>appimageutil</name>
+  <summary>A command-line utility to generate AppImage from AppDir</summary>
+  <description>A command-line utility to generate AppImage from AppDir</description>
+  <url type="homepage">https://github.com/leleliu008/appimageutil</url>
+  <project_group>leleliu008</project_group>
+  <provides>
+    <binary>appimageutil</binary>
+  </provides>
+</component>
