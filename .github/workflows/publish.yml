@@ -57,10 +57,9 @@ jobs:
       fail-fast: false
       matrix:
         target-arch: [loongarch64, x86_64, aarch64, ppc64le, riscv64, s390x]
+        pkg: [xxd, curl, gnupg, zsync, bsdtar, squashfs, appstream, coreutils, findutils, desktop-file-utils]
 
     steps:
-      - uses: actions/checkout@v4
-
       - run: |
           cat > run.sh <<EOF
           set -ex
@@ -96,27 +95,7 @@ jobs:
           sed -i '/^dep-pkg: /s|systemd||'       ~/.ppkg/repos.d/official-core/formula/appstream.yml
           sed -i 's|systemd=true|systemd=false|' ~/.ppkg/repos.d/official-core/formula/appstream.yml
 
-          run ./ppkg install xxd curl gnupg zsync bsdtar squashfs appstream coreutils findutils desktop-file-utils --static
-
-          run install -d appimageutil.d/
-          run cp -L ~/.ppkg/installed/linux-musl-x86_64/xxd/bin/xxd                                  appimageutil.d/
-          run cp -L ~/.ppkg/installed/linux-musl-x86_64/curl/bin/curl                                appimageutil.d/
-          run cp -L ~/.ppkg/installed/linux-musl-x86_64/gnupg/bin/gpg                                appimageutil.d/
-          run cp -L ~/.ppkg/installed/linux-musl-x86_64/bsdtar/bin/bsdtar                            appimageutil.d/
-          run cp -L ~/.ppkg/installed/linux-musl-x86_64/zsync/bin/zsyncmake                          appimageutil.d/
-          run cp -L ~/.ppkg/installed/linux-musl-x86_64/squashfs/bin/mksquashfs                      appimageutil.d/
-          run cp -L ~/.ppkg/installed/linux-musl-x86_64/coreutils/bin/sha256sum                      appimageutil.d/
-          run cp -L ~/.ppkg/installed/linux-musl-x86_64/findutils/bin/find                           appimageutil.d/
-          run cp -L ~/.ppkg/installed/linux-musl-x86_64/appstream/bin/appstreamcli                   appimageutil.d/
-          run cp -L ~/.ppkg/installed/linux-musl-x86_64/desktop-file-utils/bin/desktop-file-validate appimageutil.d/
-
-          run mv appimageutil.sh appimageutil.d/appimageutil
-
-          run mv ~/.ppkg/core/cacert.pem appimageutil.d/
-
-          run mv appimageutil.d appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}
-
-          run ~/.ppkg/uppm/installed/bsdtar/bin/bsdtar cvaf appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}.tar.xz appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}
+          run ./ppkg install ${{ matrix.pkg }} --static
           EOF
 
       - run: curl -LO https://raw.githubusercontent.com/alpinelinux/alpine-chroot-install/master/alpine-chroot-install
@@ -129,8 +108,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}.tar.xz
-          path: appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}.tar.xz
+          name: ${{ matrix.pkg }}---linux-${{ matrix.target-arch }}.tar.xz
+          path: ${{ matrix.pkg }}-*-linux-${{ matrix.target-arch }}.release.tar.xz
 
 
   publish:
@@ -143,26 +122,53 @@ jobs:
       GH_TOKEN: ${{ github.token }}
 
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           pattern: '*'
           path: .
           merge-multiple: true
 
+      - run: curl -LO https://curl.se/ca/cacert.pem
+
       - run: ls -a
+
+      - run: |
+          set -ex
+
+          for arch in loongarch64 x86_64 aarch64 ppc64le riscv64 s390x
+          do
+            ROOT_DIR="appimageutil-${{ needs.check.outputs.release-version }}-linux-$arch"
+            CORE_DIR="$ROOTDIR/core"
+  
+            install -d "$arch"
+            install -d "$CORE_DIR"
+
+            for f in *-linux-$arch.release.tar.xz
+            do
+              tar xf "$f" -C "$arch" --strip-components=1
+            done
+
+            for item in xxd curl gpg bsdtar zsyncmake mksquashfs sha256sum find appstreamcli desktop-file-validate
+            do
+              cp -L "$arch/bin/$item" "$CORE_DIR/"
+            done
+
+            cp -L cacert.pem "$CORE_DIR/"
+
+            cp -L appimageutil.sh "$ROOT_DIR/appimageutil"
+
+            tar -c -v --xz -f "$ROOT_DIR.tar.xz" "$ROOT_DIR"
+          done
 
       - run: |
           cat >> notes.md <<EOF
           ## sha256sum
 
           \`\`\`
-          $(sha256sum *.tar.xz)
+          $(sha256sum appimageutil-*.tar.xz)
           \`\`\`
           EOF
 
-      # to avaid: failed to run git: fatal: not a git repository (or any of the parent directories): .git
-      - run: |
-          git -c init.defaultBranch=master init
-          git remote add origin ${{ github.repositoryUrl }}
-
-      - run: gh release create ${{ needs.check.outputs.release-version }} *.tar.xz --title ${{ needs.check.outputs.release-version }} --notes-file notes.md
+      - run: gh release create ${{ needs.check.outputs.release-version }} appimageutil-*.tar.xz --title ${{ needs.check.outputs.release-version }} --notes-file notes.md

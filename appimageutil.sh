@@ -24,30 +24,6 @@ COLOR_BLUE='\033[0;94m'         # Blue
 COLOR_PURPLE='\033[0;35m'       # Purple
 COLOR_OFF='\033[0m'             # Reset
 
-print() {
-    printf '%b' "$*"
-}
-
-echo() {
-    printf '%b\n' "$*"
-}
-
-note() {
-    printf '%b\n' "${COLOR_YELLOW}🔔  $*${COLOR_OFF}" >&2
-}
-
-warn() {
-    printf '%b\n' "${COLOR_YELLOW}⚠️  $*${COLOR_OFF}" >&2
-}
-
-success() {
-    printf '%b\n' "${COLOR_GREEN}✅️  $*${COLOR_OFF}" >&2
-}
-
-error() {
-    printf '%b\n' "${COLOR_RED}💔  appimageutil: $*${COLOR_OFF}" >&2
-}
-
 abort() {
     EXIT_STATUS_CODE="$1"
     shift
@@ -56,13 +32,13 @@ abort() {
 }
 
 run() {
-    echo "${COLOR_PURPLE}==>${COLOR_OFF} ${COLOR_GREEN}$@${COLOR_OFF}"
+    printf '%b\n' "${COLOR_PURPLE}==>${COLOR_OFF} ${COLOR_GREEN}$*${COLOR_OFF}"
     eval "$@"
 }
 
-__help() {
-    printf '%b\n' "
-${COLOR_GREEN}A command-line utility to generate AppImage.${COLOR_OFF}
+help() {
+    printf '%b\n' "\
+${COLOR_GREEN}A command-line utility to generate AppImage${COLOR_OFF}
 
 ${COLOR_GREEN}$ARG0 --help${COLOR_OFF}
 ${COLOR_GREEN}$ARG0 -h${COLOR_OFF}
@@ -72,66 +48,67 @@ ${COLOR_GREEN}$ARG0 --version${COLOR_OFF}
 ${COLOR_GREEN}$ARG0 -v${COLOR_OFF}
     show version of this command.
 
-${COLOR_GREEN}$ARG0 bundle <INPUT-PATH> [OPTIONS] [-- [mksquashfs OPTIONS]]${COLOR_OFF}
-    generate the AppImage file from AppDir.
+${COLOR_GREEN}$ARG0 create <INPUT-PATH> [OPTIONS] [-- [mksquashfs OPTIONS]]${COLOR_OFF}
+    create a new AppImage file from AppDir.
 
-    ${COLOR_BLUE}<INPUT-PATH>${COLOR_OFF}
-        should end with any one of / .tar.gz .tar.xz .tar.lz .tar.bz2 .zip
+    ${COLOR_GREEN}<INPUT-PATH>${COLOR_OFF} can be either the filepath or directory. If <INPUT-PATH> is a filepath, it will be unpacked via bsdtar.
 
-    ${COLOR_BLUE}-o <OUTPUT-PATH>${COLOR_OFF}
-        specify where the AppImage file will be written to.
+    ${COLOR_GREEN}OPTIONS:${COLOR_OFF}
+        ${COLOR_BLUE}-o <OUTPUT-PATH>${COLOR_OFF}
+            specify where the AppImage file will be written to.
 
-        <OUTPUT-PATH> can be either the filepath or directory.
+            <OUTPUT-PATH> can be either the filepath or directory.
 
-        If <OUTPUT-PATH> ends with slash, it will be treated as a directory, otherwise, it will be treated as a filepath.
+            If <OUTPUT-PATH> ends with slash, it will be treated as a directory, otherwise, it will be treated as a filepath.
 
-        If <OUTPUT-PATH> is treated as a directory, the AppImage filename would be <PACKAGE-NAME>-<TARGET-ARCH>.AppImage
+            If <OUTPUT-PATH> is treated as a directory, the AppImage filename would be <PACKAGE-NAME>-<TARGET-ARCH>.AppImage
 
-        If <OUTPUT-PATH> is unspecified, the AppImage filename would be <PACKAGE-NAME>-<TARGET-ARCH>.AppImage
+            If <OUTPUT-PATH> is unspecified, the AppImage filename would be <PACKAGE-NAME>-<TARGET-ARCH>.AppImage
 
-    ${COLOR_BLUE}-v${COLOR_OFF}
-        verbose mode. many messages will be output to terminal.
+        ${COLOR_BLUE}-v${COLOR_OFF}
+            verbose mode. many messages will be output to terminal.
 
-    ${COLOR_BLUE}-x${COLOR_OFF}
-        set -x to this shell script.
+        ${COLOR_BLUE}-x${COLOR_OFF}
+            set -x to this shell script.
 
-    ${COLOR_BLUE}--no-appstream${COLOR_OFF}
-        Do not check AppStream metadata.
+        ${COLOR_BLUE}--no-appstream${COLOR_OFF}
+            Do not check AppStream metadata.
 
-    ${COLOR_BLUE}--sign${COLOR_OFF}
-        generate signature with gpg.
+        ${COLOR_BLUE}--sign${COLOR_OFF}
+            generate signature with gpg.
 
-    ${COLOR_BLUE}--sign-key <KEY>${COLOR_OFF}
-        specify gpg sign key.
+        ${COLOR_BLUE}--sign-key <KEY>${COLOR_OFF}
+            specify gpg sign key. automatically apply --sign
 
-
-    mksquashfs OPTIONS:
+    ${COLOR_GREEN}mksquashfs OPTIONS:${COLOR_OFF}
         refer to https://manpages.debian.org/jessie/squashfs-tools/mksquashfs.1.en.html
 
-    USAGE-EXAMPLES:
-        appimageutil bundle app/
-        appimageutil bundle app/                -- -comp xz -b 16384 -Xdict-size 100% -root-owned -noappend
-        appimageutil bundle app/ -o xx.AppImage -- -comp xz -b 16384 -Xdict-size 100% -root-owned -noappend
+        appimageutil use ${COLOR_RED}-comp zstd -b 128K -root-owned -noappend${COLOR_OFF} mksquashfs options by default, you can change this behaver, for example:
+
+        ${COLOR_RED}appimageutil create app/ -o xx.AppImage -- -comp xz -b 16384 -Xdict-size 100% -root-owned -noappend${COLOR_OFF}
+
+    ${COLOR_GREEN}influential environment variables:${COLOR_OFF}
+        ${COLOR_BLUE}APPIMAGEUTIL_CORE_PATH${COLOR_OFF}
+            point to the appimageutil core directory. default to ./core/
+
+        ${COLOR_BLUE}SSL_CERT_FILE${COLOR_OFF}
+            point to the cacert.pem file path. default to ./core/cacert.pem
     "
 }
 
-__bundle() {
+create() {
     unset APPDIR
     unset APPARCHIVEFILEPATH
 
-    case $1 in
-        '') abort 1 "Usage: $ARG0 bundle <APPDIR|APP_ARCHCHIVE_FILEPATH> [OPTIONS] [-- [mksquashfs OPTIONS]]"
-            ;;
-        *.tar.[glx]z|*.tar.bz2|*.zip)
-            [ -f "$1" ] || abort 1 "input file does not exist: $1"
-            APPARCHIVEFILEPATH="$1"
-            ;;
-        */)
-            [ -d "$1" ] || abort 1 "input directory does not exist: $1"
-            APPDIR="$1"
-            ;;
-        *)  abort 1 "Usage: $ARG0 bundle <INPUT> [OPTIONS] [-- [mksquashfs OPTIONS]], <INPUT> should end with any one of / .tar.gz .tar.xz .tar.lz .tar.bz2 .zip"
-    esac
+    [ -z "$1" ] && abort 1 "Usage: $ARG0 create <APPDIR|APP_ARCHCHIVE_FILEPATH> [OPTIONS] [-- [mksquashfs OPTIONS]]"
+
+    if [ -d "$1" ] ; then
+        APPDIR="$1"
+    elif [ -f "$1" ] ; then
+        APPARCHIVEFILEPATH="$1"
+    else
+        abort 1 "derecotory or file does not exist: $1"
+    fi
 
     shift
 
@@ -162,11 +139,12 @@ __bundle() {
                 shift
                 [ -z "$1" ] && abort 1 "--sign-key is given, but no value specified."
                 SIGN_ARGS="--sign-key $1"
+                SIGN_WITH_GPG=1
                 ;;
             --) shift
                 break
                 ;;
-            *)  abort 1 "Usage: $ARG0 bundle <INPUT> [OPTIONS] [-- [mksquashfs OPTIONS]], unrecognized option: $1"
+            *)  abort 1 "Usage: $ARG0 create <INPUT> [OPTIONS] [-- [mksquashfs OPTIONS]], unrecognized option: $1"
         esac
         shift
     done
@@ -239,7 +217,7 @@ __bundle() {
             ELF_ARCH="$(xxd -u -p -s 18 -l 2 "$FILEPATH")"
 
             case $ELF_ARCH in
-                0300) TARGET_ARCH='i686'    ;;
+                0300) TARGET_ARCH='x86'     ;;
                 3E00) TARGET_ARCH='x86_64'  ;;
                 B700) TARGET_ARCH='aarch64' ;;
                 F300) TARGET_ARCH='riscv64' ;;
@@ -251,7 +229,7 @@ __bundle() {
 
                     case $ELF_FLAGS in
                         00040005) TARGET_ARCH='armhf' ;;
-                        02000005) TARGET_ARCH='arm'   ;;
+                        02000005) TARGET_ARCH='armv7' ;;
                     esac
             esac
 
@@ -346,28 +324,36 @@ ARG0="$0"
 
 case $1 in
     ''|--help|-h)
-        __help
+        help
         ;;
     --version|-v)
         printf '%s\n' "$VERSION"
         ;;
-    check)
+    create)
+        if [ -z "$APPIMAGEUTIL_CORE_PATH" ] ; then
+            cd "$(dirname "$0")"
+
+            APPIMAGEUTIL_CORE_PATH="$PWD/core"
+
+            cd - > /dev/null
+        fi
+
+        if [ -d "$APPIMAGEUTIL_CORE_PATH" ] ; then
+            export PATH="$APPIMAGEUTIL_CORE_PATH:$PATH"
+
+            if [ -z "$SSL_CERT_FILE" ] ; then
+                # https://www.openssl.org/docs/man1.1.1/man3/SSL_CTX_set_default_verify_paths.html
+                export SSL_CERT_FILE="$APPIMAGEUTIL_EXEC_PATH/cacert.pem"
+
+                if [ ! -f "$SSL_CERT_FILE" ] ; then
+                    unset   SSL_CERT_FILE
+                fi
+            fi
+        fi
+
         shift
-        __check "$@"
-        ;;
-    bundle)
-        cd "$(dirname "$0")"
 
-        # https://www.openssl.org/docs/man1.1.1/man3/SSL_CTX_set_default_verify_paths.html
-        #export SSL_CERT_FILE="$PWD/cacert.pem"
-
-        export PATH="$PWD:$PATH"
-
-        cd - > /dev/null
-
-        shift
-
-        __bundle "$@"
+        create "$@"
         ;;
     *)  abort 1 "unrecognized argument: $1"
 esac
