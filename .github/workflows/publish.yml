@@ -100,6 +100,12 @@ jobs:
 
       - run: curl -LO https://raw.githubusercontent.com/alpinelinux/alpine-chroot-install/master/alpine-chroot-install
       - run: chmod +x alpine-chroot-install
+
+      # https://github.com/alpinelinux/alpine-chroot-install/issues/46
+      - run: |
+            sed -i '/APK_TOOLS_URI:=/s|x86_64|aarch64|' alpine-chroot-install
+            sed -i 's|bdd044e0fd6cc388c5e571e1093efa5f35f7767cc5aa338b0a2576a429009a62|27a975638ddc95a411c9f17c63383e335da9edf6bb7de2281d950c291a11f878|' alpine-chroot-install
+
       - run: sudo ./alpine-chroot-install -d /alpine -a aarch64
       - run: /alpine/enter-chroot sh run.sh
       - run: /alpine/destroy
