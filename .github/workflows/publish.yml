@@ -95,7 +95,7 @@ jobs:
           sed -i 's|systemd=true|systemd=false|' ~/.ppkg/repos.d/official-core/formula/appstream.yml
 
           run ./ppkg install ${{ matrix.pkg }} --static
-          run ./ppkg bundle  ${{ matrix.pkg }} .tar.xz
+          run ./ppkg bundle  ${{ matrix.pkg }} .tar.xz --exclude include/ --exclude lib/ --exclude libexec/
           EOF
 
       - run: curl -LO https://raw.githubusercontent.com/alpinelinux/alpine-chroot-install/master/alpine-chroot-install
@@ -167,7 +167,7 @@ jobs:
           sed -i 's|systemd=true|systemd=false|' ~/.ppkg/repos.d/official-core/formula/appstream.yml
 
           run ./ppkg install ${{ matrix.pkg }} --static
-          run ./ppkg bundle  ${{ matrix.pkg }} .tar.xz
+          run ./ppkg bundle  ${{ matrix.pkg }} .tar.xz --exclude include/ --exclude lib/ --exclude libexec/
           EOF
 
       - run: curl -LO https://raw.githubusercontent.com/alpinelinux/alpine-chroot-install/master/alpine-chroot-install
