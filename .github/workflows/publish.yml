@@ -56,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [xxd, curl, gnupg, zsync, bsdtar, squashfs, appstream, coreutils, findutils, desktop-file-utils]
+        pkg: [xxd, curl, tree, gnupg, zsync, bsdtar, squashfs, appstream, coreutils, findutils, desktop-file-utils]
 
     steps:
       - run: |
@@ -128,7 +128,7 @@ jobs:
       fail-fast: false
       matrix:
         target-arch: [loongarch64, x86_64, ppc64le, riscv64, s390x]
-        pkg: [xxd, curl, gnupg, zsync, bsdtar, squashfs, appstream, coreutils, findutils, desktop-file-utils]
+        pkg: [xxd, curl, tree, gnupg, zsync, bsdtar, squashfs, appstream, coreutils, findutils, desktop-file-utils]
 
     steps:
       - run: |
@@ -222,7 +222,7 @@ jobs:
               tar xf "$f" -C "$arch" --strip-components=1
             done
 
-            for item in xxd curl gpg bsdtar zsyncmake mksquashfs sha256sum find appstreamcli desktop-file-validate
+            for item in xxd curl tree find gpg bsdtar zsyncmake mksquashfs sha256sum appstreamcli desktop-file-validate
             do
               cp -L "$arch/bin/$item" "$CORE_DIR/"
             done
