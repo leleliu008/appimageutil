@@ -56,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [xxd, curl, tree, gnupg, zsync, bsdtar, squashfs, appstream, coreutils, findutils, desktop-file-utils]
+        pkg: [xxd, curl, tree, gnupg, zsync, bsdtar, coreutils, findutils, squashfs, appstream, desktop-file-utils]
 
     steps:
       - run: |
@@ -128,7 +128,7 @@ jobs:
       fail-fast: false
       matrix:
         target-arch: [loongarch64, x86_64, ppc64le, riscv64, s390x]
-        pkg: [xxd, curl, tree, gnupg, zsync, bsdtar, squashfs, appstream, coreutils, findutils, desktop-file-utils]
+        pkg: [xxd, curl, tree, gnupg, zsync, bsdtar, coreutils, findutils, squashfs, appstream, desktop-file-utils]
 
     steps:
       - run: |
@@ -186,7 +186,7 @@ jobs:
 
   publish:
     needs: [check, build-aarch64, build]
-    if: needs.check.outputs.if-has-new-commit == 'yes'
+    if: needs.check.outputs.if-new-release == 'yes'
 
     runs-on: ubuntu-latest
 
