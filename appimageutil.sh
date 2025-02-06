@@ -32,7 +32,10 @@ abort() {
 }
 
 run() {
-    printf '%b\n' "${COLOR_PURPLE}==>${COLOR_OFF} ${COLOR_GREEN}$*${COLOR_OFF}"
+    if [ "$APPIMAGEUTIL_VERBOSE" = 1 ] ; then
+        printf '%b\n' "${COLOR_PURPLE}==>${COLOR_OFF} ${COLOR_GREEN}$*${COLOR_OFF}"
+    fi
+
     eval "$@"
 }
 
@@ -88,11 +91,14 @@ ${COLOR_GREEN}$ARG0 create <INPUT-PATH> [OPTIONS] [-- [mksquashfs OPTIONS]]${COL
         ${COLOR_RED}appimageutil create app/ -o xx.AppImage -- -comp xz -b 16384 -Xdict-size 100% -root-owned -noappend${COLOR_OFF}
 
     ${COLOR_GREEN}influential environment variables:${COLOR_OFF}
+        ${COLOR_BLUE}APPIMAGEUTIL_VERBOSE${COLOR_OFF}
+            assign to 1 if you want to enable verbose mode.
+
         ${COLOR_BLUE}APPIMAGEUTIL_CORE_PATH${COLOR_OFF}
-            point to the appimageutil core directory. default to ./core/
+            assign to the appimageutil-core directory. default to ./core/
 
         ${COLOR_BLUE}SSL_CERT_FILE${COLOR_OFF}
-            point to the cacert.pem file path. default to ./core/cacert.pem
+            assign to the cacert.pem file path. default to ./core/cacert.pem
     "
 }
 
@@ -126,8 +132,9 @@ create() {
             -o) shift
                 OUTPUT_PATH="$1"
                 ;;
-            -v) ;;
-            -x) set -x
+            -v) APPIMAGEUTIL_VERBOSE=1 ;;
+            -x) APPIMAGEUTIL_VERBOSE=1
+                set -x
                 ;;
             --no-appstream)
                 CHECK_APPSTREAM=0
@@ -257,8 +264,7 @@ create() {
 
     ############################################################################
 
-    cat runtime  >> AppImage
-    cat squashfs >> AppImage
+    run 'cat runtime squashfs > AppImage'
 
     run du -sh AppImage
 
@@ -295,8 +301,11 @@ create() {
 
     ############################################################################
 
-    run mv AppImage       "$OUTPUT_FILENAME"
-    run mv AppImage.sig   "$OUTPUT_FILENAME.sig"
+    run mv AppImage "$OUTPUT_FILENAME"
+
+    if [ "$SIGN_WITH_GPG" = 1 ] ; then
+        run mv AppImage.sig "$OUTPUT_FILENAME.sig"
+    fi
 
     ############################################################################
 
