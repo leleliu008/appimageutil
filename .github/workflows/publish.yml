@@ -56,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [xxd, curl, tree, gnupg, zsync, bsdtar, coreutils, findutils, squashfs, appstream, desktop-file-utils]
+        pkg: [xxd, curl, tree, gnupg, zsync, bsdtar, sysinfo, coreutils, findutils, squashfs, appstream, desktop-file-utils]
 
     steps:
       - run: |
@@ -107,7 +107,7 @@ jobs:
             sed -i 's|bdd044e0fd6cc388c5e571e1093efa5f35f7767cc5aa338b0a2576a429009a62|27a975638ddc95a411c9f17c63383e335da9edf6bb7de2281d950c291a11f878|' alpine-chroot-install
 
       - run: sudo ./alpine-chroot-install -d /alpine -a aarch64
-      - run: /alpine/enter-chroot sh run.sh
+      - run: /alpine/enter-chroot /bin/sh run.sh
       - run: /alpine/destroy
 
       - run: ls
@@ -128,13 +128,11 @@ jobs:
       fail-fast: false
       matrix:
         target-arch: [loongarch64, x86_64, ppc64le, riscv64, s390x]
-        pkg: [xxd, curl, tree, gnupg, zsync, bsdtar, coreutils, findutils, squashfs, appstream, desktop-file-utils]
+        pkg: [xxd, curl, tree, gnupg, zsync, bsdtar, sysinfo, coreutils, findutils, squashfs, appstream, desktop-file-utils]
 
     steps:
       - run: |
           cat > run.sh <<EOF
-          set -ex
-
           COLOR_GREEN='\033[0;32m'        # Green
           COLOR_PURPLE='\033[0;35m'       # Purple
           COLOR_OFF='\033[0m'             # Reset
@@ -173,7 +171,7 @@ jobs:
       - run: curl -LO https://raw.githubusercontent.com/alpinelinux/alpine-chroot-install/master/alpine-chroot-install
       - run: chmod +x alpine-chroot-install
       - run: sudo ./alpine-chroot-install -d /alpine -a ${{ matrix.target-arch }}
-      - run: /alpine/enter-chroot sh run.sh
+      - run: /alpine/enter-chroot /bin/sh run.sh
       - run: /alpine/destroy
 
       - run: ls
@@ -184,21 +182,23 @@ jobs:
           path: ${{ matrix.pkg }}-*-linux-${{ matrix.target-arch }}.release.tar.xz
 
 
-  publish:
+  bundle:
     needs: [check, build-aarch64, build]
     if: needs.check.outputs.if-new-release == 'yes'
 
     runs-on: ubuntu-latest
 
-    env:
-      GH_TOKEN: ${{ github.token }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target-arch: [loongarch64, x86_64, ppc64le, riscv64, s390x]
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: '*'
+          pattern: '*---linux-${{ matrix.target-arch }}.tar.xz'
           path: .
           merge-multiple: true
 
@@ -207,40 +207,95 @@ jobs:
       - run: ls -a
 
       - run: |
+          cat > run.sh <<EOF
           set -ex
 
-          for arch in loongarch64 x86_64 aarch64 ppc64le riscv64 s390x
+          run uname -a
+          run id
+          run pwd
+
+          apk update
+          apk add tar xz
+
+          install -d cache/ out/core/ out/share/applications/ out/share/metainfo/ out/share/icons/hicolor/256x256/apps/
+
+          for f in *-linux-${{ matrix.target-arch }}.release.tar.xz
           do
-            ROOT_DIR="appimageutil-${{ needs.check.outputs.release-version }}-linux-$arch"
-            CORE_DIR="$ROOT_DIR/core"
-  
-            install -d "$arch"
-            install -d "$CORE_DIR"
-
-            for f in *-linux-$arch.release.tar.xz
-            do
-              tar xf "$f" -C "$arch" --strip-components=1
-            done
-
-            for item in xxd curl tree find gpg bsdtar zsyncmake mksquashfs sha256sum appstreamcli desktop-file-validate
-            do
-              cp -L "$arch/bin/$item" "$CORE_DIR/"
-            done
-
-            cp -L cacert.pem "$CORE_DIR/"
-
-            cp -L appimageutil.sh "$ROOT_DIR/appimageutil"
-
-            tar -c -v --xz -f "$ROOT_DIR.tar.xz" "$ROOT_DIR"
+            tar xf "\$f" -C cache --strip-components=1
           done
+
+          for item in xxd curl tree find gpg bsdtar sysinfo zsyncmake mksquashfs sha256sum appstreamcli desktop-file-validate
+          do
+            mv "cache/bin/\$item" out/core/
+          done
+
+          mv cacert.pem out/core/
+
+          mv appimageutil.sh          out/appimageutil
+          mv appimageutil.desktop     out/share/applications/
+          mv appimageutil.appdata.xml out/share/metainfo/com.fpliu.appimageutil.appdata.xml
+          mv appimageutil.256x256.png out/share/icons/hicolor/256x256/apps/appimageutil.png
+
+          ROOT_DIR="appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}"
+
+          mv out "\$ROOT_DIR"
+
+          tar -c -v --xz -f "\$ROOT_DIR.tar.xz" "\$ROOT_DIR"
+
+          cd "\$ROOT_DIR"
+
+          # https://docs.appimage.org/reference/appdir.html
+          ln -s appimageutil AppRun
+          ln -s share/applications/appimageutil.desktop           appimageutil.desktop
+          ln -s share/icons/hicolor/256x256/apps/appimageutil.png appimageutil.png
+          ln -s share/icons/hicolor/256x256/apps/appimageutil.png .DirIcon
+
+          ./appimageutil . "../\$ROOT_DIR.AppImage"
+          EOF
+
+      - run: curl -LO https://raw.githubusercontent.com/alpinelinux/alpine-chroot-install/master/alpine-chroot-install
+      - run: chmod +x alpine-chroot-install
+      - run: sudo ./alpine-chroot-install -d /alpine -a ${{ matrix.target-arch }}
+      - run: /alpine/enter-chroot /bin/sh run.sh
+      - run: /alpine/destroy
+
+      - run: ls
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}
+          path: appimageutil-${{ needs.check.outputs.release-version }}-linux-${{ matrix.target-arch }}.*
+
+
+  publish:
+    needs: [check, bundle]
+    if: needs.check.outputs.if-new-release == 'yes'
+
+    runs-on: ubuntu-latest
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: 'appimageutil-*'
+          path: .
+          merge-multiple: true
+
+      - run: ls -a
 
       - run: |
           cat >> notes.md <<EOF
           ## sha256sum
 
           \`\`\`
-          $(sha256sum appimageutil-*.tar.xz)
+          $(sha256sum appimageutil-*)
           \`\`\`
           EOF
 
-      - run: gh release create ${{ needs.check.outputs.release-version }} appimageutil-*.tar.xz --title ${{ needs.check.outputs.release-version }} --notes-file notes.md
+      # to avaid: failed to run git: fatal: not a git repository (or any of the parent directories): .git
+      - run: git -c init.defaultBranch=master init
+      - run: git remote add origin ${{ github.repositoryUrl }}
+
+      - run: gh release create ${{ needs.check.outputs.release-version }} appimageutil-* --title ${{ needs.check.outputs.release-version }} --notes-file notes.md
